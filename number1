@@ -1,0 +1,217 @@
+import json
+from datetime import datetime
+
+import pygame
+import random
+
+pygame.init()
+
+SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 800
+
+d = 5
+FPS = 30
+running = True
+
+clock = pygame.time.Clock()
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+
+
+class BaseObject:
+
+    def data_to_save(self):
+        ...
+
+
+class Food(BaseObject):
+    def _init_(self):
+        self.x = random.randint(0, SCREEN_WIDTH)
+        self.y = random.randint(0, SCREEN_HEIGHT)
+
+    def gen(self):
+        self.x = random.randint(0, SCREEN_WIDTH)
+        self.y = random.randint(0, SCREEN_HEIGHT)
+
+    def draw(self):
+        pygame.draw.rect(screen, (0, 255, 0), (self.x, self.y, 10, 10))
+
+    def data_to_save(self):
+        return {'x': self.x, 'y': self.y}
+
+
+class Wall(BaseObject):
+    def _init_(self):
+        self.__bricks = []
+        self.__generate_bricks()
+
+    def __generate_bricks(self):
+        for x in range(SCREEN_WIDTH):
+            for y in range(SCREEN_HEIGHT):
+                if self.is_brick(x, y):
+                    self.__bricks.append([x, y])
+
+    @staticmethod
+    def is_brick(x, y):
+        if x == 0 or y == 0 or x == SCREEN_WIDTH - d*2 \
+                or y == SCREEN_HEIGHT - d*2:
+            return True
+
+    def draw(self):
+        for (x, y) in self.__bricks:
+            pygame.draw.rect(screen, (150, 75, 0), (x, y, 10, 10))
+
+    def data_to_save(self):
+        return {'bricks': self.__bricks}
+
+
+class Snake(BaseObject):
+    def _init_(self, color, x, y, k_left, k_up, k_down, k_right):
+        self.size = 1
+        self.elements = [[x, y]]
+        self.radius = 10
+        self.dx = 5 # right
+        self.dy = 0
+        self.is_add = False
+        self.is_dead = False
+        self.speed = 10
+        self.__rgb = color
+        self.coords = {
+            'right': k_right,
+            'left': k_left,
+            'up':  k_up,
+            'down':  k_down
+        }
+
+
+    def draw(self):
+        for element in self.elements:
+            pygame.draw.circle(screen, self.__rgb, element, self.radius)
+
+    def add_to_snake(self):
+        self.elements.append([0, 0])
+        self.is_add = False
+        if self.size % 3 == 0:
+            self.speed += 10
+
+    def move(self):
+        if self.is_add:
+            self.add_to_snake()
+
+        for i in range(self.size - 1, 0, -1):
+            self.elements[i][0] = self.elements[i - 1][0]
+            self.elements[i][1] = self.elements[i - 1][1]
+
+        self.elements[0][0] += self.dx
+        self.elements[0][1] += self.dy
+
+    def __eat(self, foodx, foody):
+        x = self.elements[0][0]
+        y = self.elements[0][1]
+
+        if foodx <= x <= foodx + 10 and foody <= y <= foody + 10:
+            self.is_add = True
+            return True
+
+        return False
+
+    def __is_hit_a_wall(self, _wall: Wall):
+        x, y = self.elements[0]
+        if _wall.is_brick(x, y):
+            self.is_dead = True
+
+    def eat(self, _food: Food, _wall: Wall):
+        self.__is_hit_a_wall(_wall)
+
+        if self.__eat(_food.x, _food.y):
+            _food.gen()
+
+    def feed_event(self, evt, d):
+        if evt.type == pygame.KEYDOWN:
+            if evt.key == self.coords['right'] and self.dx != -d:
+                self.dx = d
+                self.dy = 0
+            if evt.key == self.coords['left'] and self.dx != d:
+                self.dx = -d
+                self.dy = 0
+            if evt.key == self.coords['up'] and self.dy != d:
+                self.dx = 0
+                self.dy = -d
+            if evt.key == self.coords['down'] and self.dy != -d:
+                self.dx = 0
+                self.dy = d
+
+    def data_to_save(self):
+        return {
+            'elements': self.elements,
+            'radius': self.radius,
+            'dx': self.dx,
+            'dy': self.dy,
+            'speed': self.speed,
+            'color': self.__rgb,
+            'controls': self.coords
+        }
+
+
+def save_game(_data: dict):
+    data_str = datetime.now().strftime("%m.%d.%YT%H:%M:%S")
+    with open(f"{data_str}.json", 'w') as file:
+        json.dump(_data, file)
+
+
+snake1 = Snake((255, 0, 0), 100, 100, pygame.K_LEFT, pygame.K_UP, pygame.K_DOWN, pygame.K_RIGHT)
+snake2 = Snake((255, 0, 70), 150, 100, pygame.K_a, pygame.K_w, pygame.K_s, pygame.K_d)
+
+food = Food()
+wall = Wall()
+
+snakes = [snake1, snake2]
+
+while running:
+    clock.tick(snake1.speed)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+        if event.type == pygame.KEYDOWN:
+
+            # saving the state by press SPACE KEY
+            if event.key == pygame.K_SPACE:
+                data = {
+                    'wall': wall.data_to_save(),
+                    'food': wall.data_to_save(),
+                    'snakes': [sn.data_to_save() for sn in snakes]
+                }
+
+                save_game(data)
+
+            if event.key == pygame.K_ESCAPE:
+                running = False
+
+            for snake in snakes:
+                snake.feed_event(event, d)
+
+    for snake in snakes:
+        snake.eat(food, wall)
+        snake.move()
+
+    # clearing canvas
+    screen.fill((0, 0, 0))
+
+    # remove from the list of dead snakes
+    snakes = [s for s in snakes if not s.is_dead]
+
+    # game is over if snakes.length equal 0
+    if not len(snakes):
+        running = False
+
+    # drawing items
+    for snake in snakes:
+        snake.draw()
+
+    food.draw()
+    wall.draw()
+
+    pygame.display.flip()
+
+pygame.quit()
