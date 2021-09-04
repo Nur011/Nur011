@@ -1,0 +1,152 @@
+# Paint
+import pygame, random
+
+# (x1, y1), (x2, y2)
+# A = y2 - y1
+# B = x1 - x2
+# C = x2 * y1 - x1 * y2
+# Ax + By + C = 0
+# (x - x1) / (x2 - x1) = (y - y1) / (y2 - y1)
+
+
+def drawLine(screen, start, end, width, color):
+    x1 = start[0]
+    y1 = start[1]
+    x2 = end[0]
+    y2 = end[1]
+
+    dx = abs(x1 - x2)
+    dy = abs(y1 - y2)
+
+    A = y2 - y1
+    B = x1 - x2
+    C = x2 * y1 - x1 * y2
+
+    if dx > dy:
+        if x1 > x2:
+            x1, x2 = x2, x1
+            y1, y2 = y2, y1
+
+        for x in range(x1, x2):
+            y = (-C - A * x) / B
+            pygame.draw.circle(screen, color, (x, y), width)
+    else:
+        if y1 > y2:
+            x1, x2 = x2, x1
+            y1, y2 = y2, y1
+        for y in range(y1, y2):
+            x = (-C - B * y) / A
+            pygame.draw.circle(screen, color, (x, y), width)
+
+
+class Canvas:
+    def _init_(self, scn):
+        self.__main_mode = 'brush'
+        self.__screen = scn
+        self.__mode = 'random'
+        self.__current_color = (255, 128, 0)
+        self.__default_colors = {
+            'red': (255, 0, 0),
+            'blue': (0, 0, 255),
+            'green': (0, 255, 0)
+        }
+
+        self.__radius = 10
+        self.__last_pos = (0, 0)
+        self.__last_click_pos = (0, 0)
+        self.__draw_on = False
+        self.ctrl = False
+
+    def on_key_down(self, evt):
+        # if evt.key == pygame.K_w and ctrl_held:
+        #     return
+        # if evt.key == pygame.K_F4 and alt_held:
+        #     return
+        if evt.key == pygame.K_r:
+            self.__mode = 'red'
+        if evt.key == pygame.K_b:
+            self.__mode = 'blue'
+        if evt.key == pygame.K_g:
+            self.__mode = 'green'
+        if evt.key == pygame.K_UP:
+            self.__radius += 1
+        if evt.key == pygame.K_DOWN:
+            self.__radius -= 1
+
+    def on_mouse_up(self, evt):
+        self.__draw_on = False
+
+    def on_mouse_down(self, event):
+
+
+        if self.__mode == 'random':
+            self.__current_color = (random.randrange(256), random.randrange(256), random.randrange(256))
+        else:
+            self._current_color = self.default_colors[self._mode]
+
+        if self.__main_mode == 'brush':
+            pygame.draw.circle(self.__screen,
+                               self.__current_color,
+                               event.pos,
+                               self.__radius)
+
+        elif self.__main_mode == 'rectangle':
+            # TODO : fix bug with finishing
+            if not self.__last_click_pos:
+                self.__last_click_pos = event.pos
+
+        self.__draw_on = True
+
+    def on_mouse_motion(self, event):
+        if self._draw_on and self._main_mode == 'brush':
+            drawLine(self._screen, self._last_pos, event.pos,
+                     self._radius, self._current_color)
+
+        elif self._draw_on and self._main_mode =='rectangle':
+            prev_x, prev_y = self.__last_click_pos
+            x, y = event.pos
+            pygame.draw.rect(self.__screen,
+                             self.__current_color,
+                             pygame.Rect(prev_x, prev_y, x, y))
+
+            # pygame.draw.circle(screen, color, event.pos, radius)
+        self.__last_pos = event.pos
+
+    def __change_mode_if_needed(self, evt):
+        if evt.key == pygame.K_1:
+            self.__main_mode = 'brush'
+        elif evt.key == pygame.K_2:
+            self.__main_mode = 'rectangle'
+        elif evt.key == pygame.K_3:
+            self.__main_mode = 'circle'
+
+    def feed_event(self, evt):
+        if evt.type == pygame.QUIT:
+            return
+        if evt.type == pygame.KEYDOWN:
+            self.on_key_down(evt)
+            self.__change_mode_if_needed(evt)
+        if evt.type == pygame.MOUSEBUTTONDOWN:
+            self.on_mouse_down(evt)
+        if evt.type == pygame.MOUSEBUTTONUP:
+            self.on_mouse_up(evt)
+        if evt.type == pygame.MOUSEMOTION:
+            self.on_mouse_motion(evt)
+
+
+def main():
+    screen = pygame.display.set_mode((800, 600))
+    cnv = Canvas(screen)
+
+    while True:
+        pressed = pygame.key.get_pressed()
+        alt_held = pressed[pygame.K_LALT] or pressed[pygame.K_RALT]
+        cnv.ctrl = pressed[pygame.K_LCTRL] or pressed[pygame.K_RCTRL]
+
+        for event in pygame.event.get():
+            cnv.feed_event(event)
+
+        pygame.display.flip()
+
+
+main()
